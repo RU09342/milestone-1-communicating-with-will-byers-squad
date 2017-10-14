@@ -1,6 +1,6 @@
 #include "msp430g2553.h"
 
-//For Addressable RGB LED strip, the strip comes in this Thursday
+//For Addressable RGB LED strip, confirmed working!
 
 //P1.2 Data Out; and P1.4 Serial Clock Out;
 #define NPIXELS 5       //Number of LEDS in the string
@@ -290,8 +290,8 @@ void setup(void){
     BCSCTL1 |= DIVA_3;          //Set Aclk divider to 8 (~3Khz)
 
     //Setup Main clocks
-    DCOCTL = CALDCO_16MHZ;  //Set DCO 16MHZ
-    BCSCTL1 |= CALBC1_16MHZ;        //set SMCLK 16MHZ
+    DCOCTL = CALDCO_1MHZ;  //Set DCO 16MHZ
+    BCSCTL1 |= CALBC1_1MHZ;        //set SMCLK 16MHZ
 
     //Setup USCI for SPI
     P1SEL = BIT2 + BIT4;
