@@ -1,1 +1,37 @@
-# Milestone 1: Communicating with Will Byers
+MSP430 Microprocessors (5 boards):
+------------------------------------------
+MSP430G2553
+------------------------------------------
+
+Stranger Things: Wall of Twinkling Lights
+Addressable RGB LED Strip (32 LEDs)
++5V power pin, GND pin, P1.2 Data Out pin, P1.4 Serial Clock Out pin.
+Slow alternating lights, each start at a different color.
+
+------------------------------------------
+
+The first few lines provide definitions for changing the amount of LEDs in the currently tested LED strip to any amount as required. A byte character is defined for creating the columns that specific flag/color data will go into. A structure named LED initializes the array that holds this data. The NCOLORS definition tells the rainbow function how many colors to cycle through per LED; it also defines how many rows are in the color-data array. The NCOLORBYTES definition tells the next line below it how many total data points are within the array. A static constant, for holding the data points in between any and all functions, is created and pre-coded for various flags and RGB colors. The static constant creates the array of color-data, called LED. This array/matrix is pointed to by a function that places a value from 1 to 512 onto each datapoint, used to declare the order of the cycling. A framebuffer is then created with the number of LEDs in the strip, essentially serving as RAM for inputting the bitmap data of the colors for each LED. Then, multiple prototype functions are initialized before any code is placed in them. The flag byte is initialized by a function called makeflag that holds three unsigned char bytes within it, and another unsigned integer loopcount=0 for serving as the global variable for all other function blocks.
+
+Within the main(void) function block, the in/out pin setup function is first initialized. An infinite while loop puts one color (in a loopcount) out of 128 colors into the framebuffer by sending it to the rainbowsmooth function. This buffer is then sent to the string of outputting binary data that is sent to the LED strip. The watchdog timer is initialized for its loop delay in interval mode, clear count, ACLK source, and with 64-cycle intervals. The watchdog interrupt capabilities are then enabled. Meanwhile, while no interrupts are occuring, the microprocessor will stop executions and enter low power mode, waking up from a watchdog-interrupt for the next LED-frame to be inputted. The loopcount variable increments by 1 to cycle through the 128 colors, and will revert back to 0 if loopcount is equal to or greater than 128.
+
+The watchdog interrupt service routine is declared by #pragma vector=WDT_VECTOR. Within the interrupt function block, the watchdog timer is stopped and its interrupt capabilities are disabled only during an interrupt by the incrementing watchdog timer. Also during this interrupt, active mode is coded to turn back on after the interrupt has passed.
+
+The rainbowsmooth function creates an unsigned character byte called offset. Within this function, an unsigned int n is declared to control the for-loop. The for-loop initializs n=0 and increments n by 1 until n is no longer less than 32 (the number of LEDs). During each loop-iteration, all 128 colors are fed through the LED over time until the table has been fully cycled through, restarting the loop by moving to the next LED in the strip.
+
+The outputframe function initializes an unsigned int c. An unsigned character byte called framebytes (pointing to the byte definitions in the 512 colorbytes) is created by receiving byte-data from the framebuffer. An SPI output between the internal 4-pin synchronous serial data link in the microprocessor is initialized with the name spi_ctlLED. A for-loop initializes c=0 and increments c by 1 until c is no longer less than 512, the number of bytes of color-information. During each iteration, the spi_byte function is fed an individual byte that corresponds to the byte's number declared by the variable c. The spi_ctlLED is called again, providing a byte of 0 information at the beginning of the framebuffer and at the end of it.
+
+The spi_ctlLED function declares an int c. A for-loop initializes c=4 and decrements c by 1 until c is no longer greater than 0. This loop goes for 4 cycles, representing the 4 bytes (flag,blue,green,red) found in each of the 128 colors per LED. The information placed into the spi_byte function is 0 for this function.
+
+The spi_byte function outputs a unsigned character byte called data. Within this function, the USCIO TX pin has its interrupt capabilities enabled. The if-statement states that while no information is coming out of the TX pin, the microprocessor will enter an off-mode. Outside of the if-statement, data is placed into the TX transmitting buffer, to be declared in the future by other functions.
+
+The TX pin interrupt service routine is declared by #pragma vector_USCIAB0TX_VECTOR. Within the interrupt function block, the microprocessor's active-mode is resumed. The interrupt flag for the TX pin is reset, and the interrupt capabilities are then disabled. All other executions are resumed when the TX buffer is ready for a new character byte to be outputted.
+
+The flag byte is created within the function makeflag, by initializing the 3 pieces of data within it as byte red, byte green, byte blue. Within this function, the flag byte is cleared to 0. The hexadecimal flag value begins from left-to-right with the binary information for red color, green color, and then blue color. This information is shifted accordingly so that the red color is the leftmost significant bits. The flag value is then returned to the be declared in the future by other functions.
+
+The setLED_RGB function outputs 4 bytes of data, byte n (the flag), byte red, byte green, and byte blue. These 4 bytes are defined by the values currently in the framebuffer, where the locations of their binary values are determined by the typedef struct (i.e. framebuffer[n].g for green, comes from byte g).
+
+The setLED_LUT function (look-up-table) outputs two bytes of data (n and color) and the current data value from one of the 128 colors. The only line in this function enters the datapoints found one at a time into the framebuffer, from one of the 128 colors in the pre-coded table of 512 bytes. 
+
+Lastly, the input/output pins and other clock peripherals are defined within the setup function. The watchdog timer is stopped here. The ACLK is set up with roughly a 3kHz frequency, sourced by LFXT1 and set to the internal VLO. The speed of the cycling colors per LED is determined by the microprocessor's functions for declaring clock speed. Currently it is at 1 MHz, causing slight choppiness in color changes since there are not enough color variations between cycles. But slowing it down to 16MHz shows a very smooth and slow cycling of colors, great for christmas tree lighting. The SMCLK pin and DATAOUT pin are at last defined here.
+
+------------------------------------------
