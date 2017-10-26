@@ -1,0 +1,130 @@
+
+//        |           P1.7|--> UCA0TXD
+//        |           P1.6|<-- UCA0RXD
+//        |               |
+//        |           P2.0|--> Red (TA1.1)
+//        |           P2.1|--> Green (TA1.2)
+//        |           P1.0|--> Blue (TA1.0)
+#include <msp430g2553.h> 
+#include <stdint.h>
+
+const uint8_t colorsLow[12][3] = {
+                           //{R, G, B}
+                           {134,1,1},   //RED
+                           {134,15,1},  //RED-ORANGE
+                           {134,20,1},  //ORANGE
+                           {134,30,1},  //ORANGE-YELLOW
+                           {134,55,1},  //YELLOW
+                           {67,80,1},   //YELLOW-GREEN
+                           {1,134,1},   //GREEN
+                           {1,134,134}, //GREEN-BLUE
+                           {1,1,134},   //BLUE
+                           {67,1,134},  //BLUE-PURPLE
+                           {134,1,134}, //PURPLE
+                           {134,1,80}   //PURPLE-RED
+};
+//  Contains the high (off) period for the RGB LEDs for each color selection
+const uint8_t colorsHigh[12][3] = {
+                           //{R, G, B}
+                           {1,134,134}, //RED
+                           {1,120,134}, //RED-ORANGE
+                           {1,115,134}, //ORANGE
+                           {1,100,134}, //ORANGE-YELLOW
+                           {1,80,134},  //YELLOW
+                           {68,55,134}, //YELLOW-GREEN
+                           {134,1,134}, //GREEN
+                           {134,1,1},   //GREEN-BLUE
+                           {134,134,1}, //BLUE
+                           {68,134,1},  //BLUE-PURPLE
+                           {1,134,1},   //PURPLE
+                           {1,134,55}   //PURPLE-RED
+};
+
+uint8_t selected;   //Used to track the current color selection
+
+void main(void)
+{
+    WDTCTL = WDTPW | WDTHOLD;               // Stop watchdog timer
+    selected = 0;                           // Default to Red
+    
+    UCA0CTL0 = UCSWRST | UCSSEL_1;
+    UCA0BR0 = 3;
+    UCA0MCTL = 0x9200;
+    UCA0CTL0 &= ~UCSWRST;              // Initialize eUSCI
+    IE2 |= UCA0RXIE;                          // Enable USCI_A0 RX interrupt
+    // Configure GPIO
+    P1SEL = BIT2 | BIT3; // TA1.1 and 0.2, UCA0 RXD and TXD
+    P2SEL = BIT0 | BIT2;
+    P2DIR = BIT0 | BIT2 | BIT4;         // TA1.1, 0.2, 0.0 (on P1.0)
+    P2OUT = 0;
+    //SYSCFG3 = TARMP;                    // Re-Map timer B to P2.0/1
+    // Set up Timer B in continuous mode for multiple time base PWMs.
+    // See app note SLAA513 for theory.
+    TA1CCTL0 = CCIS_0 + OUTMOD_4 + CCIE;    // CCR0 toggle, interrupt enabled
+    TA1CCTL1 = CCIS_0 + OUTMOD_4 + CCIE;    // CCR1 toggle, interrupt enabled
+    TA1CCTL2 = CCIS_0 + OUTMOD_4 + CCIE;    // CCR2 toggle, interrupt enabled
+
+    // REF0CLK/4 = 8192 is used for TBCLK so that the period of 60Hz can be
+    // generated with TA1CCRx values totaling only 135 for the period of 60Hz
+    // PWM. This is less than 255, so that the lookup table can be made of 8-bit
+    // values, saving additional FRAM space on small devices.
+    TA1CTL = TASSEL_1 + ID_3 + MC_2 + TACLR;   // ACLK, contmode, clear TAR
+
+    __bis_SR_register(LPM3_bits | GIE);     // Go to LPM3 with interrupts
+    __no_operation();
+}
+
+// UART interrupt service routine
+#pragma vector=USCI_A0_VECTOR
+__interrupt void USCI_A0_ISR(void)
+{
+    selected = UCA0RXBUF;   // Get new value for selected color
+
+    if(selected > 11)       // If value out of range, set default 0 (red)
+    {
+        selected = 0;
+    }
+}
+// Timer_B0 interrupt service routine
+#pragma vector=TIMER0_B0_VECTOR
+__interrupt void TIMER0_B0_ISR (void)
+{
+    if(P2OUT & BIT0)                        // Check current output level
+    {
+        TA1CCR0 += colorsLow[selected][2];  // Low period (Blue LED on)
+        P2OUT = 0;      // TA1.0 not brought out on pin, so set manually
+    }
+    else
+    {
+        TA1CCR0 += colorsHigh[selected][2]; // High period (Blue LED off)
+        P2OUT = BIT0;   // TA1.0 not brought out on pin, so set manually
+    }
+}
+// Timer_B1 Interrupt Vector (TBIV) handler
+#pragma vector=TIMER0_B1_VECTOR
+__interrupt void TIMER0_B1_ISR(void)
+{
+    switch(__even_in_range(TA1IV,14))
+    {
+        case 0: break;
+        case 2: if(TA1CCTL1 & CCI)          // Check current timer pin state
+                {
+                    TA1CCR1 += colorsHigh[selected][0]; // High period (Red off)
+                }
+                else
+                {
+                    TA1CCR1 += colorsLow[selected][0];  // Low period (Red on)
+                }
+                break;
+        case 4: if(TA1CCTL2 & CCI)          // Check current timer pin state
+                {
+                   TA1CCR2 += colorsHigh[selected][1];  // High (Green off)
+                }
+                else
+                {
+                   TA1CCR2 += colorsLow[selected][1];   // Low period (Green on)
+                }
+                break;
+        default:    break;
+    }
+}
